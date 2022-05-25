@@ -4,6 +4,7 @@
 
 #define __ARG_NUM__				6
 #define THRESHOLD				128
+#define NEIGHBOURHOOD			5
 
 using namespace std;
 
@@ -19,7 +20,7 @@ int filterVer[FILTER_SIZE * FILTER_SIZE] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, 
 
 
 int scale(int value) {
-	if (value < THRESHOLD) {
+	if (value <= THRESHOLD) {
 		return 0;
 	}
 	return 1;
@@ -37,6 +38,18 @@ int filter(int *inBuffer, int x, int y, int width) {
 	}
 	G = sqrt(Gx * Gx + Gy * Gy);
 	return 255 * scale(G);
+}
+
+int checkNeighbours(int* outBuffer, int x, int y, int width) {
+	int P = 0, O = 1;
+	int step = NEIGHBOURHOOD - 2;
+	for (int i = 0; i < NEIGHBOURHOOD; i++) {
+		for (int j = 0; j < NEIGHBOURHOOD; j++) {
+			if (outBuffer[(x - i + step) + (y - j + step) * width] == 1) P = 1;
+			if (outBuffer[(x - i + step) + (y - j + step) * width] == 0) O = 0;
+		}
+	}
+	return 255 * abs(P - O);
 }
 
 /**
@@ -78,6 +91,17 @@ void filter_parallel_prewitt(int *inBuffer, int *outBuffer, int width, int heigh
 */
 void filter_serial_edge_detection(int *inBuffer, int *outBuffer, int width, int height)	//TODO obrisati
 {
+	for (int x = 0; x < width; x++) {
+		for (int y = 0; y < height; y++) {
+			inBuffer[x + y * width] = scale(inBuffer[x + y * width]);
+		}
+	}
+	int step = NEIGHBOURHOOD - 2;
+	for (int x = step; x < width - step; x++) {
+		for (int y = step; y < height - step; y++) {
+			outBuffer[x + y * width] = checkNeighbours(inBuffer, x, y, width);
+		}
+	}
 }
 
 /**
