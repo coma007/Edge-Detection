@@ -3,29 +3,40 @@
 #include "BitmapRawConverter.h"
 
 #define __ARG_NUM__				6
-#define FILTER_SIZE				3
 #define THRESHOLD				128
 
 using namespace std;
 
-// Prewitt operators
-int filterHor[FILTER_SIZE * FILTER_SIZE] = {-1, 0, 1, -1, 0, 1, -1, 0, 1};
-int filterVer[FILTER_SIZE * FILTER_SIZE] = {-1, -1, -1, 0, 0, 0, 1, 1, 1};
+// Prewitt operators 5
+#define FILTER_SIZE				5
+int filterHor[FILTER_SIZE * FILTER_SIZE] = {-1, -1, 0, 1, 1, -1, -1, 0, 1, 1, -1, -1, 0, 1, 1, -1, -1, 0, 1, 1 , -1, -1, 0, 1, 1};
+int filterVer[FILTER_SIZE * FILTER_SIZE] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+// Prewitt operators 3
+//#define FILTER_SIZE				3
+//int filterHor[FILTER_SIZE * FILTER_SIZE] = {-1, 0, 1, -1, 0, 1, -1, 0, 1};
+//int filterVer[FILTER_SIZE * FILTER_SIZE] = {-1, -1, -1, 0, 0, 0, 1, 1, 1};
+
 
 int scale(int value) {
 	if (value < THRESHOLD) {
-		return 255;
+		return 0;
 	}
-	return 0;
+	return 1;
 }
 
-int filter(int raw, int m, int n) {
+int filter(int *inBuffer, int x, int y, int width) {
 
-	int Gx, Gy, G;
-	Gx = raw * filterHor[m + n * FILTER_SIZE];
-	Gy = raw * filterVer[m + n * FILTER_SIZE];
-	G = abs(Gx) + abs(Gy);
-	return scale(G);
+	int G = 0, Gx = 0, Gy = 0, raw;
+	for (int n = 0; n < FILTER_SIZE; n++) {
+		for (int m = 0; m < FILTER_SIZE; m++) {
+			raw = inBuffer[(x - 1 + m) + (y - 1 + n) * width];
+			Gx += raw * filterHor[m + n * FILTER_SIZE];
+			Gy += raw * filterVer[m + n * FILTER_SIZE];
+		}
+	}
+	G = sqrt(Gx * Gx + Gy * Gy);
+	return 255 * scale(G);
 }
 
 /**
@@ -37,17 +48,10 @@ int filter(int raw, int m, int n) {
 */
 void filter_serial_prewitt(int *inBuffer, int *outBuffer, int width, int height)  //TODO obrisati
 {
-	cout << width * height << endl;
-	int raw = 0;
-	for (int x = 1; x < width - 1; x++) {
-		for (int y = 1; y < height - 1; y++) {
-			for (int n = 0; n < FILTER_SIZE; n++) {
-				for (int m = 0; m < FILTER_SIZE; m++) {
-					raw = inBuffer[(x - 1 + m) + (y - 1 + n) * width];
-					outBuffer[x + y * width] = filter(raw, m, n);
-				}
-			}
-		//cout << outBuffer[x + y * width];
+	int error = FILTER_SIZE - 2;
+	for (int x = error; x < width - error; x++) {
+		for (int y = error; y < height - error; y++) {
+			outBuffer[x + y * width] = filter(inBuffer, x, y, width);
 		}
 	}
 }
