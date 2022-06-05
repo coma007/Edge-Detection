@@ -41,10 +41,11 @@ int scale(int value) {
 
 int filter(int* inBuffer, int x, int y, int width) {
 
+	int save = FILTER_SIZE / 2;
 	int G = 0, Gx = 0, Gy = 0, raw;
 	for (int n = 0; n < FILTER_SIZE; n++) {
 		for (int m = 0; m < FILTER_SIZE; m++) {
-			raw = inBuffer[(x - 1 + m) + (y - 1 + n) * width];
+			raw = inBuffer[(x - save + m) + (y - save + n) * width];
 			Gx += raw * filterHor[m + n * FILTER_SIZE];
 			Gy += raw * filterVer[m + n * FILTER_SIZE];
 		}
@@ -55,7 +56,7 @@ int filter(int* inBuffer, int x, int y, int width) {
 
 int checkNeighbours(int* outBuffer, int x, int y, int width) {
 	int P = 0, O = 1;
-	int step = NEIGHBOURHOOD - 2;
+	int step = NEIGHBOURHOOD / 2 + 1;
 	int value;
 	for (int i = 0; i < NEIGHBOURHOOD; i++) {
 		for (int j = 0; j < NEIGHBOURHOOD; j++) {
@@ -74,9 +75,9 @@ int checkNeighbours(int* outBuffer, int x, int y, int width) {
 * @param width image width
 * @param height image height
 */
-void filter_serial_prewitt(int* inBuffer, int* outBuffer, int width, int height, int stepVer = FILTER_SIZE - 2)  //TODO obrisati
+void filter_serial_prewitt(int* inBuffer, int* outBuffer, int width, int height, int stepVer = FILTER_SIZE / 2 + 1)  //TODO obrisati
 {
-	int stepHor = FILTER_SIZE - 2;
+	int stepHor = FILTER_SIZE / 2 + 1;
 	for (int x = stepHor; x < width - stepHor; x++) {
 		for (int y = stepVer; y < height - stepVer; y++) {
 			outBuffer[x + y * width] = filter(inBuffer, x, y, width);
@@ -119,9 +120,9 @@ void filter_parallel_prewitt(int* inBuffer, int* outBuffer, int width, int heigh
 * @param width image width
 * @param height image height
 */
-void filter_serial_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int stepVer = FILTER_SIZE - 2)	//TODO obrisati
+void filter_serial_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int stepVer = NEIGHBOURHOOD / 2 + 1)	//TODO obrisati
 {
-	int stepHor = NEIGHBOURHOOD - 2;
+	int stepHor = NEIGHBOURHOOD / 2 + 1;
 	for (int x = stepHor; x < width - stepHor; x++) {
 		for (int y = stepVer; y < height - stepVer; y++) {
 			outBuffer[x + y * width] = checkNeighbours(inBuffer, x, y, width);
@@ -172,8 +173,8 @@ void run_test_nr(int testNr, BitmapRawConverter* ioFile, char* outFileName, int*
 {
 
 	// TODO: start measure
-	int stepPrewitt = FILTER_SIZE - 2;
-	int stepEdge = NEIGHBOURHOOD - 2;
+	int stepPrewitt = FILTER_SIZE / 2 + 1;
+	int stepEdge = NEIGHBOURHOOD / 2 + 1;
 
 	switch (testNr)
 	{
