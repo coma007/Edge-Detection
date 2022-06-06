@@ -1,37 +1,51 @@
 #include <iostream>
 #include <stdlib.h>
 #include "BitmapRawConverter.h"
+
 #include "tbb/task_group.h"
+#include <tbb/tick_count.h>
 
 using namespace std;
 using namespace tbb;
 
 #define __ARG_NUM__				6
 #define THRESHOLD				128
-#define NEIGHBOURHOOD			5
-#define GRAIN_ROWS				100
+
+#define NEIGHBOURHOOD_SIZE		5
+#define CUTOFF					20
+
+// Prewitt operators 3
+//#define FILTER_SIZE				3
+//int filterHor[FILTER_SIZE * FILTER_SIZE] = { -1, 0, 1, -1, 0, 1, -1, 0, 1 };
+//int filterVer[FILTER_SIZE * FILTER_SIZE] = { -1, -1, -1, 0, 0, 0, 1, 1, 1 };
+
+// Prewitt operators 5
+#define FILTER_SIZE				5
+int filterHor[FILTER_SIZE * FILTER_SIZE] = { -1, -1, 0, 1, 1, -1, -1, 0, 1, 1, -1, -1, 0, 1, 1, -1, -1, 0, 1, 1 , -1, -1, 0, 1, 1 };
+int filterVer[FILTER_SIZE * FILTER_SIZE] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+
+// Prewitt operators 5 [test]
+//#define FILTER_SIZE				5
+//int filterHor[FILTER_SIZE * FILTER_SIZE] = { 9, 9, 9, 9, 9, 9, 5, 5, 5, 9, -7, -3, 0, -3, -7, -7, -3, -3, -3, -7 , -7, -7, -7, -7, -7 };
+//int filterVer[FILTER_SIZE * FILTER_SIZE] = { 9, 9, -7, -7, -7, 9, 5, -3, -3, -7, 9, 5, 0, -3, -7, 9, 5, -3, -3, -7, 9, 9, -7, -7, -7 };
 
 // Prewitt operators 7
 //#define FILTER_SIZE				7
 //int filterHor[FILTER_SIZE * FILTER_SIZE] = { -1, -1, -1, 0, 1, 1, 1, -1, -1, -1, 0, 1, 1, 1, -1, -1, -1, 0, 1, 1, 1, -1, -1, -1, 0, 1, 1, 1, -1, -1, -1, 0, 1, 1, 1, -1, -1, -1, 0, 1, 1, 1, -1, -1, -1, 0, 1, 1, 1 };
 //int filterVer[FILTER_SIZE * FILTER_SIZE] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,1, 1, 1, 1, 1, 1, 1 };
 
-// Prewitt operators 5
-//#define FILTER_SIZE				5
-//int filterHor[FILTER_SIZE * FILTER_SIZE] = { -1, -1, 0, 1, 1, -1, -1, 0, 1, 1, -1, -1, 0, 1, 1, -1, -1, 0, 1, 1 , -1, -1, 0, 1, 1 };
-//int filterVer[FILTER_SIZE * FILTER_SIZE] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+#define SKIP_PREWITT			FILTER_SIZE / 2 + 1
+#define SKIP_NEIGHBOURS			NEIGHBOURHOOD_SIZE / 2 + 1
 
-// Prewitt operators 5
-#define FILTER_SIZE				5
-int filterHor[FILTER_SIZE * FILTER_SIZE] = { 9, 9, 9, 9, 9, 9, 5, 5, 5, 9, -7, -3, 0, -3, -7, -7, -3, -3, -3, -7 , -7, -7, -7, -7, -7 };
-int filterVer[FILTER_SIZE * FILTER_SIZE] = { 9, 9, -7, -7, -7, 9, 5, -3, -3, -7, 9, 5, 0, -3, -7, 9, 5, -3, -3, -7, 9, 9, -7, -7, -7 };
+unsigned int totalWidth, totalHeight;
 
-// Prewitt operators 3
-//#define FILTER_SIZE				3
-//int filterHor[FILTER_SIZE * FILTER_SIZE] = {-1, 0, 1, -1, 0, 1, -1, 0, 1};
-//int filterVer[FILTER_SIZE * FILTER_SIZE] = {-1, -1, -1, 0, 0, 0, 1, 1, 1};
-
-
+/**
+* @brief Scales value to 0 and 1
+* 
+* @param value value of image pixel
+* 
+* @return scaled value
+*/
 int scale(int value) {
 	if (value <= THRESHOLD) {
 		return 0;
@@ -39,13 +53,23 @@ int scale(int value) {
 	return 1;
 }
 
-int filter(int* inBuffer, int x, int y, int width) {
+/**
+* @brief Prewitt operator on input image single pixel
+* 
+* @param inBuffer buffer of input image
+* @param x horizontal coordinate of pixel
+* @param y vertical coordinate of pixel
+* @param width image width
+* 
+* @return scaled value of operator result
+*/
+int filter(int* inBuffer, int x, int y) {
 
-	int save = FILTER_SIZE / 2;
+	int save = SKIP_PREWITT - 1;
 	int G = 0, Gx = 0, Gy = 0, raw;
 	for (int n = 0; n < FILTER_SIZE; n++) {
 		for (int m = 0; m < FILTER_SIZE; m++) {
-			raw = inBuffer[(x - save + m) + (y - save + n) * width];
+			raw = inBuffer[(x - save + m) + (y - save + n) * totalWidth];
 			Gx += raw * filterHor[m + n * FILTER_SIZE];
 			Gy += raw * filterVer[m + n * FILTER_SIZE];
 		}
@@ -54,13 +78,23 @@ int filter(int* inBuffer, int x, int y, int width) {
 	return 255 * scale(G);
 }
 
-int checkNeighbours(int* outBuffer, int x, int y, int width) {
+
+/**
+* @brief Neighbourhood check around input image pixel
+* 
+* @param inBuffer buffer of input image
+* @param x horizontal coordinate of pixel
+* @param y vertical coordinate of pixel
+* @param width image width
+* 
+* @return scaled value of neighbourhood result
+*/
+int checkNeighbours(int* outBuffer, int x, int y) {
 	int P = 0, O = 1;
-	int step = NEIGHBOURHOOD / 2 + 1;
 	int value;
-	for (int i = 0; i < NEIGHBOURHOOD; i++) {
-		for (int j = 0; j < NEIGHBOURHOOD; j++) {
-			value = scale(outBuffer[(x - i + step) + (y - j + step) * width]);
+	for (int i = 0; i < NEIGHBOURHOOD_SIZE; i++) {
+		for (int j = 0; j < NEIGHBOURHOOD_SIZE; j++) {
+			value = scale(outBuffer[(x - i + SKIP_NEIGHBOURS) + (y - j + SKIP_NEIGHBOURS) * totalWidth]);
 			if (value == 1) P = 1;
 			else O = 0;
 		}
@@ -70,25 +104,25 @@ int checkNeighbours(int* outBuffer, int x, int y, int width) {
 
 /**
 * @brief Serial version of edge detection algorithm implementation using Prewitt operator
+* 
 * @param inBuffer buffer of input image
 * @param outBuffer buffer of output image
 * @param width image width
 * @param height image height
 */
-void filter_serial_prewitt(int* inBuffer, int* outBuffer, int width, int height, int totalWidth, int totalHeight, int col=0, int row=0)  //TODO obrisati
+void filter_serial_prewitt(int* inBuffer, int* outBuffer, int width, int height, int col=0, int row=0)  //TODO obrisati
 {
-	//int stepHor = FILTER_SIZE / 2 + 1;
 	int lowerX, lowerY, upperX, upperY;
 
-	lowerX = (col < FILTER_SIZE / 2 + 1) ? FILTER_SIZE / 2 + 1 : col;
-	lowerY = (row < FILTER_SIZE / 2 + 1) ? FILTER_SIZE / 2 + 1 : row;
-	upperX = (col + width > totalWidth - (FILTER_SIZE / 2 + 1)) ? totalWidth - (FILTER_SIZE / 2 + 1) : col + width;
-	upperY = (row + height > totalHeight - (FILTER_SIZE / 2 + 1)) ? totalHeight - (FILTER_SIZE / 2 + 1) : row + height;
+	lowerX = (col < SKIP_PREWITT) ? SKIP_PREWITT : col;
+	lowerY = (row < SKIP_PREWITT) ? SKIP_PREWITT : row;
+	upperX = (col + width > totalWidth - (SKIP_PREWITT)) ? totalWidth - (SKIP_PREWITT) : col + width;
+	upperY = (row + height > totalHeight - (SKIP_PREWITT)) ? totalHeight - (SKIP_PREWITT) : row + height;
 	
 
 	for (int x = lowerX; x < upperX; x++) {
 		for (int y = lowerY; y < upperY; y++) {
-			outBuffer[x + y * totalWidth] = filter(inBuffer, x, y, totalWidth);
+			outBuffer[x + y * totalWidth] = filter(inBuffer, x, y);
 		}
 	}
 }
@@ -96,16 +130,16 @@ void filter_serial_prewitt(int* inBuffer, int* outBuffer, int width, int height,
 
 /**
 * @brief Parallel version of edge detection algorithm implementation using Prewitt operator
-*
+* 
 * @param inBuffer buffer of input image
 * @param outBuffer buffer of output image
 * @param width image width
 * @param height image height
 */
-void filter_parallel_prewitt(int* inBuffer, int* outBuffer, int width, int height, int totalWidth, int totalHeight, int col=0, int row=0)
+void filter_parallel_prewitt(int* inBuffer, int* outBuffer, int width, int height, int col=0, int row=0)
 {
-	if (height <= GRAIN_ROWS) {
-		filter_serial_prewitt(inBuffer, outBuffer, width, height, totalWidth, totalHeight, col, row);
+	if (min(height, width) <= CUTOFF) {
+		filter_serial_prewitt(inBuffer, outBuffer, width, height, col, row);
 	}
 
 	else {
@@ -114,10 +148,10 @@ void filter_parallel_prewitt(int* inBuffer, int* outBuffer, int width, int heigh
 		int restHeight = height - taskHeight;
 		int taskWidth = width / 2;
 		int restWidth = width - taskWidth;
-		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, taskHeight, totalWidth, totalHeight, col, row); });
-		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, restWidth, taskHeight, totalWidth, totalHeight, col+taskWidth, row); });
-		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, restHeight, totalWidth, totalHeight, col, row+taskHeight); });
-		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, restWidth, restHeight, totalWidth, totalHeight, col+taskWidth, row+taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, taskHeight, col, row); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, restWidth, taskHeight, col+taskWidth, row); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, restHeight, col, row+taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, restWidth, restHeight, col+taskWidth, row+taskHeight); });
 		t.wait();
 	}
 
@@ -125,43 +159,44 @@ void filter_parallel_prewitt(int* inBuffer, int* outBuffer, int width, int heigh
 
 /**
 * @brief Serial version of edge detection algorithm
+* 
 * @param inBuffer buffer of input image
 * @param outBuffer buffer of output image
 * @param width image width
 * @param height image height
 */
-void filter_serial_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int totalWidth, int totalHeight, int col=0, int row=0)	//TODO obrisati
+void filter_serial_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int col=0, int row=0)	//TODO obrisati
 {
-	int stepHor = NEIGHBOURHOOD / 2 + 1;
+	int stepHor = SKIP_NEIGHBOURS;
 
 	int lowerX, lowerY, upperX, upperY;
 
-	lowerX = (col < NEIGHBOURHOOD / 2 + 1) ? NEIGHBOURHOOD / 2 + 1 : col;
-	lowerY = (row < NEIGHBOURHOOD / 2 + 1) ? NEIGHBOURHOOD / 2 + 1 : row;
-	upperX = (col + width > totalWidth - (NEIGHBOURHOOD / 2 + 1)) ? totalWidth - (NEIGHBOURHOOD / 2 + 1) : col + width;
-	upperY = (row + height > totalHeight - (NEIGHBOURHOOD / 2 + 1)) ? totalHeight - (NEIGHBOURHOOD / 2 + 1) : row + height;
+	lowerX = (col < SKIP_NEIGHBOURS) ? SKIP_NEIGHBOURS : col;
+	lowerY = (row < SKIP_NEIGHBOURS) ? SKIP_NEIGHBOURS : row;
+	upperX = (col + width > totalWidth - (SKIP_NEIGHBOURS)) ? totalWidth - (SKIP_NEIGHBOURS) : col + width;
+	upperY = (row + height > totalHeight - (SKIP_NEIGHBOURS)) ? totalHeight - (SKIP_NEIGHBOURS) : row + height;
 
 
 
 	for (int x = lowerX; x < upperX; x++) {
 		for (int y = lowerY; y < upperY; y++) {
-			outBuffer[x + y * totalWidth] = checkNeighbours(inBuffer, x, y, totalWidth);
+			outBuffer[x + y * totalWidth] = checkNeighbours(inBuffer, x, y);
 		}
 	}
 }
 
 /**
 * @brief Parallel version of edge detection algorithm
-*
+* 
 * @param inBuffer buffer of input image
 * @param outBuffer buffer of output image
 * @param width image width
 * @param height image height
 */
-void filter_parallel_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int totalWidth, int totalHeight, int col = 0, int row = 0)	//TODO obrisati
+void filter_parallel_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int col = 0, int row = 0)	//TODO obrisati
 {
-	if (height <= GRAIN_ROWS) {
-		filter_serial_edge_detection(inBuffer, outBuffer, width, height, totalWidth, totalHeight, col, row);
+	if (min(height, width) <= CUTOFF) {
+		filter_serial_edge_detection(inBuffer, outBuffer, width, height, col, row);
 	}
 
 	else {
@@ -170,10 +205,10 @@ void filter_parallel_edge_detection(int* inBuffer, int* outBuffer, int width, in
 		int restHeight = height - taskHeight;
 		int taskWidth = width / 2;
 		int restWidth = width - taskWidth;
-		t.run([&] {filter_parallel_edge_detection(inBuffer, outBuffer, taskWidth, taskHeight, totalWidth, totalHeight, col, row); });
-		t.run([&] {filter_parallel_edge_detection(inBuffer, outBuffer, restWidth, taskHeight, totalWidth, totalHeight, col + taskWidth, row); });
-		t.run([&] {filter_parallel_edge_detection(inBuffer, outBuffer, taskWidth, restHeight, totalWidth, totalHeight, col, row + taskHeight); });
-		t.run([&] {filter_parallel_edge_detection(inBuffer, outBuffer, restWidth, restHeight, totalWidth, totalHeight, col + taskWidth, row + taskHeight); });
+		t.run([&] {filter_parallel_edge_detection(inBuffer, outBuffer, taskWidth, taskHeight, col, row); });
+		t.run([&] {filter_parallel_edge_detection(inBuffer, outBuffer, restWidth, taskHeight, col + taskWidth, row); });
+		t.run([&] {filter_parallel_edge_detection(inBuffer, outBuffer, taskWidth, restHeight, col, row + taskHeight); });
+		t.run([&] {filter_parallel_edge_detection(inBuffer, outBuffer, restWidth, restHeight, col + taskWidth, row + taskHeight); });
 		t.wait();
 	}
 
@@ -190,37 +225,38 @@ void filter_parallel_edge_detection(int* inBuffer, int* outBuffer, int width, in
 * @param height image height
 */
 
-
 void run_test_nr(int testNr, BitmapRawConverter* ioFile, char* outFileName, int* outBuffer, unsigned int width, unsigned int height)
 {
 
 	// TODO: start measure
-	int stepPrewitt = FILTER_SIZE / 2 + 1;
-	int stepEdge = NEIGHBOURHOOD / 2 + 1;
+	tick_count startTime = tick_count::now();
 
 	switch (testNr)
 	{
 	case 1:
 		cout << "Running serial version of edge detection using Prewitt operator" << endl;
-		filter_serial_prewitt(ioFile->getBuffer(), outBuffer, width, height, width, height);
+		filter_serial_prewitt(ioFile->getBuffer(), outBuffer, width, height);
 		break;
 	case 2:
 		cout << "Running parallel version of edge detection using Prewitt operator" << endl;
-		filter_parallel_prewitt(ioFile->getBuffer(), outBuffer, width, height, width, height);
+		filter_parallel_prewitt(ioFile->getBuffer(), outBuffer, width, height);
 		break;
 	case 3:
 		cout << "Running serial version of edge detection" << endl;
-		filter_serial_edge_detection(ioFile->getBuffer(), outBuffer, width, height, width, height);
+		filter_serial_edge_detection(ioFile->getBuffer(), outBuffer, width, height);
 		break;
 	case 4:
 		cout << "Running parallel version of edge detection" << endl;
-		filter_parallel_edge_detection(ioFile->getBuffer(), outBuffer, width, height, width, height);
+		filter_parallel_edge_detection(ioFile->getBuffer(), outBuffer, width, height);
 		break;
 	default:
 		cout << "ERROR: invalid test case, must be 1, 2, 3 or 4!";
 		break;
 	}
+
 	// TODO: end measure and display time
+	tick_count endTime = tick_count::now();
+	cout << "Elapsed time: " << (endTime - startTime).seconds() << " seconds\n\n";
 
 	ioFile->setBuffer(outBuffer);
 	ioFile->pixelsToBitmap(outFileName);
@@ -255,48 +291,40 @@ int main(int argc, char* argv[])
 	BitmapRawConverter outputFileSerialEdge(argv[1]);
 	BitmapRawConverter outputFileParallelEdge(argv[1]);
 
-	unsigned int width, height;
+	
+	totalWidth = inputFile.getWidth();
+	totalHeight = inputFile.getHeight();
 
-	int test;
+	int* outBufferSerialPrewitt = new int[totalWidth * totalHeight];
+	int* outBufferParallelPrewitt = new int[totalWidth * totalHeight];
 
-	width = inputFile.getWidth();
-	height = inputFile.getHeight();
+	memset(outBufferSerialPrewitt, 0x0, totalWidth * totalHeight * sizeof(int));
+	memset(outBufferParallelPrewitt, 0x0, totalWidth * totalHeight * sizeof(int));
 
-	int* outBufferSerialPrewitt = new int[width * height];
-	int* outBufferParallelPrewitt = new int[width * height];
+	int* outBufferSerialEdge = new int[totalWidth * totalHeight];
+	int* outBufferParallelEdge = new int[totalWidth * totalHeight];
 
-	memset(outBufferSerialPrewitt, 0x0, width * height * sizeof(int));
-	memset(outBufferParallelPrewitt, 0x0, width * height * sizeof(int));
+	memset(outBufferSerialEdge, 0x0, totalWidth * totalHeight * sizeof(int));
+	memset(outBufferParallelEdge, 0x0, totalWidth * totalHeight * sizeof(int));
 
-	int* outBufferSerialEdge = new int[width * height];
-	int* outBufferParallelEdge = new int[width * height];
-
-	memset(outBufferSerialEdge, 0x0, width * height * sizeof(int));
-	memset(outBufferParallelEdge, 0x0, width * height * sizeof(int));
 
 	// serial version Prewitt
-	run_test_nr(1, &outputFileSerialPrewitt, argv[2], outBufferSerialPrewitt, width, height);
+	run_test_nr(1, &outputFileSerialPrewitt, argv[2], outBufferSerialPrewitt, totalWidth, totalHeight);
 
 	// parallel version Prewitt
-	run_test_nr(2, &outputFileParallelPrewitt, argv[3], outBufferParallelPrewitt, width, height);
+	run_test_nr(2, &outputFileParallelPrewitt, argv[3], outBufferParallelPrewitt, totalWidth, totalHeight);
 
 	// serial version special
-	run_test_nr(3, &outputFileSerialEdge, argv[4], outBufferSerialEdge, width, height);
+	run_test_nr(3, &outputFileSerialEdge, argv[4], outBufferSerialEdge, totalWidth, totalHeight);
 
 	// parallel version special
-	run_test_nr(4, &outputFileParallelEdge, argv[5], outBufferParallelEdge, width, height);
+	run_test_nr(4, &outputFileParallelEdge, argv[5], outBufferParallelEdge, totalWidth, totalHeight);
 
-
-
-	/*for (int i = 0; i <= width*height; i++) {
-		if (outputFileSerialEdge.getBuffer()[i] - outputFileParallelEdge.getBuffer()[i] != 0) {
-			cout << i / width << endl;
-		}
-	}*/
 
 	// verification
+	int test;
 	cout << "Verification: ";
-	test = memcmp(outBufferSerialPrewitt, outBufferParallelPrewitt, width * height * sizeof(int));
+	test = memcmp(outBufferSerialPrewitt, outBufferParallelPrewitt, totalWidth * totalHeight * sizeof(int));
 
 	if (test != 0)
 	{
@@ -307,7 +335,7 @@ int main(int argc, char* argv[])
 		cout << "Prewitt PASS." << endl;
 	}
 
-	test = memcmp(outBufferSerialEdge, outBufferParallelEdge, width * height * sizeof(int));
+	test = memcmp(outBufferSerialEdge, outBufferParallelEdge, totalWidth * totalHeight * sizeof(int));
 
 	if (test != 0)
 	{
