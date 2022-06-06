@@ -75,12 +75,20 @@ int checkNeighbours(int* outBuffer, int x, int y, int width) {
 * @param width image width
 * @param height image height
 */
-void filter_serial_prewitt(int* inBuffer, int* outBuffer, int width, int height, int stepVer = FILTER_SIZE / 2 + 1)  //TODO obrisati
+void filter_serial_prewitt(int* inBuffer, int* outBuffer, int width, int height, int totalWidth, int totalHeight, int col=0, int row=0)  //TODO obrisati
 {
-	int stepHor = FILTER_SIZE / 2 + 1;
-	for (int x = stepHor; x < width - stepHor; x++) {
-		for (int y = stepVer; y < height - stepVer; y++) {
-			outBuffer[x + y * width] = filter(inBuffer, x, y, width);
+	//int stepHor = FILTER_SIZE / 2 + 1;
+	int lowerX, lowerY, upperX, upperY;
+
+	lowerX = (col < FILTER_SIZE / 2 + 1) ? FILTER_SIZE / 2 + 1 : col;
+	lowerY = (row < FILTER_SIZE / 2 + 1) ? FILTER_SIZE / 2 + 1 : row;
+	upperX = (col + width > totalWidth - (FILTER_SIZE / 2 + 1)) ? totalWidth - (FILTER_SIZE / 2 + 1) : col + width;
+	upperY = (row + height > totalHeight - (FILTER_SIZE / 2 + 1)) ? totalHeight - (FILTER_SIZE / 2 + 1) : row + height;
+	
+
+	for (int x = lowerX; x < upperX; x++) {
+		for (int y = lowerY; y < upperY; y++) {
+			outBuffer[x + y * totalWidth] = filter(inBuffer, x, y, totalWidth);
 		}
 	}
 }
@@ -94,20 +102,22 @@ void filter_serial_prewitt(int* inBuffer, int* outBuffer, int width, int height,
 * @param width image width
 * @param height image height
 */
-void filter_parallel_prewitt(int* inBuffer, int* outBuffer, int width, int height)
+void filter_parallel_prewitt(int* inBuffer, int* outBuffer, int width, int height, int totalWidth, int totalHeight, int col=0, int row=0)
 {
 	if (height <= GRAIN_ROWS) {
-		filter_serial_prewitt(inBuffer, outBuffer, width, height, 0);
+		filter_serial_prewitt(inBuffer, outBuffer, width, height, totalWidth, totalHeight, col, row);
 	}
 
 	else {
 		task_group t;
-		int taskHeight = height / 4;
-		int restHeight = height - 3 * taskHeight;
-		t.run([&] {filter_parallel_prewitt(inBuffer + width * (0 * taskHeight), outBuffer + width * (0 * taskHeight), width, taskHeight); });
-		t.run([&] {filter_parallel_prewitt(inBuffer + width * (1 * taskHeight), outBuffer + width * (1 * taskHeight), width, taskHeight); });
-		t.run([&] {filter_parallel_prewitt(inBuffer + width * (2 * taskHeight), outBuffer + width * (2 * taskHeight), width, taskHeight); });
-		t.run([&] {filter_parallel_prewitt(inBuffer + width * (3 * taskHeight), outBuffer + width * (3 * taskHeight), width, restHeight); });
+		int taskHeight = height / 2;
+		int restHeight = height - taskHeight;
+		int taskWidth = width / 2;
+		int restWidth = width - taskWidth;
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, taskHeight, totalWidth, totalHeight, col, row); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, restWidth, taskHeight, totalWidth, totalHeight, col+taskWidth, row); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, restHeight, totalWidth, totalHeight, col, row+taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, restWidth, restHeight, totalWidth, totalHeight, col+taskWidth, row+taskHeight); });
 		t.wait();
 	}
 
@@ -120,12 +130,22 @@ void filter_parallel_prewitt(int* inBuffer, int* outBuffer, int width, int heigh
 * @param width image width
 * @param height image height
 */
-void filter_serial_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int stepVer = NEIGHBOURHOOD / 2 + 1)	//TODO obrisati
+void filter_serial_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int totalWidth, int totalHeight, int col=0, int row=0)	//TODO obrisati
 {
 	int stepHor = NEIGHBOURHOOD / 2 + 1;
-	for (int x = stepHor; x < width - stepHor; x++) {
-		for (int y = stepVer; y < height - stepVer; y++) {
-			outBuffer[x + y * width] = checkNeighbours(inBuffer, x, y, width);
+
+	int lowerX, lowerY, upperX, upperY;
+
+	lowerX = (col < NEIGHBOURHOOD / 2 + 1) ? NEIGHBOURHOOD / 2 + 1 : col;
+	lowerY = (row < NEIGHBOURHOOD / 2 + 1) ? NEIGHBOURHOOD / 2 + 1 : row;
+	upperX = (col + width > totalWidth - (NEIGHBOURHOOD / 2 + 1)) ? totalWidth - (NEIGHBOURHOOD / 2 + 1) : col + width;
+	upperY = (row + height > totalHeight - (NEIGHBOURHOOD / 2 + 1)) ? totalHeight - (NEIGHBOURHOOD / 2 + 1) : row + height;
+
+
+
+	for (int x = lowerX; x < upperX; x++) {
+		for (int y = lowerY; y < upperY; y++) {
+			outBuffer[x + y * totalWidth] = checkNeighbours(inBuffer, x, y, totalWidth);
 		}
 	}
 }
@@ -138,20 +158,22 @@ void filter_serial_edge_detection(int* inBuffer, int* outBuffer, int width, int 
 * @param width image width
 * @param height image height
 */
-void filter_parallel_edge_detection(int* inBuffer, int* outBuffer, int width, int height)
+void filter_parallel_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int totalWidth, int totalHeight, int col = 0, int row = 0)	//TODO obrisati
 {
 	if (height <= GRAIN_ROWS) {
-		filter_serial_edge_detection(inBuffer, outBuffer, width, height, 0);
+		filter_serial_edge_detection(inBuffer, outBuffer, width, height, totalWidth, totalHeight, col, row);
 	}
 
 	else {
 		task_group t;
-		int taskHeight = height / 4;
-		int restHeight = height - 3 * taskHeight;
-		t.run([&] {filter_parallel_edge_detection(inBuffer + width * (0 * taskHeight), outBuffer + width * (0 * taskHeight), width, taskHeight); });
-		t.run([&] {filter_parallel_edge_detection(inBuffer + width * (1 * taskHeight), outBuffer + width * (1 * taskHeight), width, taskHeight); });
-		t.run([&] {filter_parallel_edge_detection(inBuffer + width * (2 * taskHeight), outBuffer + width * (2 * taskHeight), width, taskHeight); });
-		t.run([&] {filter_parallel_edge_detection(inBuffer + width * (3 * taskHeight), outBuffer + width * (3 * taskHeight), width, restHeight); });
+		int taskHeight = height / 2;
+		int restHeight = height - taskHeight;
+		int taskWidth = width / 2;
+		int restWidth = width - taskWidth;
+		t.run([&] {filter_parallel_edge_detection(inBuffer, outBuffer, taskWidth, taskHeight, totalWidth, totalHeight, col, row); });
+		t.run([&] {filter_parallel_edge_detection(inBuffer, outBuffer, restWidth, taskHeight, totalWidth, totalHeight, col + taskWidth, row); });
+		t.run([&] {filter_parallel_edge_detection(inBuffer, outBuffer, taskWidth, restHeight, totalWidth, totalHeight, col, row + taskHeight); });
+		t.run([&] {filter_parallel_edge_detection(inBuffer, outBuffer, restWidth, restHeight, totalWidth, totalHeight, col + taskWidth, row + taskHeight); });
 		t.wait();
 	}
 
@@ -180,19 +202,19 @@ void run_test_nr(int testNr, BitmapRawConverter* ioFile, char* outFileName, int*
 	{
 	case 1:
 		cout << "Running serial version of edge detection using Prewitt operator" << endl;
-		filter_serial_prewitt(ioFile->getBuffer(), outBuffer, width, height);
+		filter_serial_prewitt(ioFile->getBuffer(), outBuffer, width, height, width, height);
 		break;
 	case 2:
 		cout << "Running parallel version of edge detection using Prewitt operator" << endl;
-		filter_parallel_prewitt(ioFile->getBuffer() + width * stepPrewitt, outBuffer + width * stepPrewitt, width, height - 2*stepPrewitt);
+		filter_parallel_prewitt(ioFile->getBuffer(), outBuffer, width, height, width, height);
 		break;
 	case 3:
 		cout << "Running serial version of edge detection" << endl;
-		filter_serial_edge_detection(ioFile->getBuffer(), outBuffer, width, height);
+		filter_serial_edge_detection(ioFile->getBuffer(), outBuffer, width, height, width, height);
 		break;
 	case 4:
 		cout << "Running parallel version of edge detection" << endl;
-		filter_parallel_edge_detection(ioFile->getBuffer() + width * stepEdge, outBuffer + width * stepEdge, width, height - 2*stepEdge);
+		filter_parallel_edge_detection(ioFile->getBuffer(), outBuffer, width, height, width, height);
 		break;
 	default:
 		cout << "ERROR: invalid test case, must be 1, 2, 3 or 4!";
