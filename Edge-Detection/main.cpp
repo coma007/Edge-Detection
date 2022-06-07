@@ -54,12 +54,11 @@ int scale(int value) {
 }
 
 /**
-* @brief Prewitt operator on input image single pixel
+* @brief Prewitt operator on input image submatrix around pixel
 * 
 * @param inBuffer buffer of input image
 * @param x horizontal coordinate of pixel
 * @param y vertical coordinate of pixel
-* @param width image width
 * 
 * @return scaled value of operator result
 */
@@ -85,7 +84,6 @@ int filter(int* inBuffer, int x, int y) {
 * @param inBuffer buffer of input image
 * @param x horizontal coordinate of pixel
 * @param y vertical coordinate of pixel
-* @param width image width
 * 
 * @return scaled value of neighbourhood result
 */
@@ -109,8 +107,10 @@ int checkNeighbours(int* outBuffer, int x, int y) {
 * @param outBuffer buffer of output image
 * @param width image width
 * @param height image height
+* @param col current column of input image
+* @param row current row of input image
 */
-void filter_serial_prewitt(int* inBuffer, int* outBuffer, int width, int height, int col=0, int row=0)  //TODO obrisati
+void filter_serial_prewitt(int* inBuffer, int* outBuffer, int width, int height, int col=0, int row=0)  
 {
 	int lowerX, lowerY, upperX, upperY;
 
@@ -135,6 +135,8 @@ void filter_serial_prewitt(int* inBuffer, int* outBuffer, int width, int height,
 * @param outBuffer buffer of output image
 * @param width image width
 * @param height image height
+* @param col current column of input image
+* @param row current row of input image
 */
 void filter_parallel_prewitt(int* inBuffer, int* outBuffer, int width, int height, int col=0, int row=0)
 {
@@ -164,8 +166,10 @@ void filter_parallel_prewitt(int* inBuffer, int* outBuffer, int width, int heigh
 * @param outBuffer buffer of output image
 * @param width image width
 * @param height image height
+* @param col current column of input image
+* @param row current row of input image
 */
-void filter_serial_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int col=0, int row=0)	//TODO obrisati
+void filter_serial_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int col=0, int row=0)	
 {
 	int stepHor = SKIP_NEIGHBOURS;
 
@@ -192,8 +196,10 @@ void filter_serial_edge_detection(int* inBuffer, int* outBuffer, int width, int 
 * @param outBuffer buffer of output image
 * @param width image width
 * @param height image height
+* @param col current column of input image
+* @param row current row of input image
 */
-void filter_parallel_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int col = 0, int row = 0)	//TODO obrisati
+void filter_parallel_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int col = 0, int row = 0)	
 {
 	if (min(height, width) <= CUTOFF) {
 		filter_serial_edge_detection(inBuffer, outBuffer, width, height, col, row);
@@ -228,7 +234,6 @@ void filter_parallel_edge_detection(int* inBuffer, int* outBuffer, int width, in
 void run_test_nr(int testNr, BitmapRawConverter* ioFile, char* outFileName, int* outBuffer, unsigned int width, unsigned int height)
 {
 
-	// TODO: start measure
 	tick_count startTime = tick_count::now();
 
 	switch (testNr)
@@ -254,7 +259,6 @@ void run_test_nr(int testNr, BitmapRawConverter* ioFile, char* outFileName, int*
 		break;
 	}
 
-	// TODO: end measure and display time
 	tick_count endTime = tick_count::now();
 	cout << "Elapsed time: " << (endTime - startTime).seconds() << " seconds\n\n";
 
