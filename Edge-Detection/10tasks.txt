@@ -1,0 +1,23 @@
+
+		task_group t;
+		int taskHeight = height / 4;
+		int restHeight = height - 3* taskHeight;
+		int taskWidth = width / 4;
+		int restWidth = width - 3* taskWidth;
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, taskHeight, col, row); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, taskHeight, col+taskWidth, row); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, taskHeight, col+2*taskWidth, row); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, restWidth, taskHeight, col+3*taskWidth, row); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, taskHeight, col, row+taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, taskHeight, col+taskWidth, row + taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, taskHeight, col+2*taskWidth, row+taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, restWidth, taskHeight, col+3*taskWidth, row+taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, taskHeight, col, row+2*taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, taskHeight, col+taskWidth, row + 2*taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, taskHeight, col+2*taskWidth, row+2*taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, restWidth, taskHeight, col+3*taskWidth, row+2*taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, restHeight, col, row+3*taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, restHeight, col+taskWidth, row + 3*taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, taskWidth, restHeight, col+2*taskWidth, row+3*taskHeight); });
+		t.run([&] {filter_parallel_prewitt(inBuffer, outBuffer, restWidth, restHeight, col+3*taskWidth, row+3*taskHeight); });
+		t.wait();

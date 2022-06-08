@@ -11,18 +11,18 @@ using namespace tbb;
 #define __ARG_NUM__				6
 #define THRESHOLD				128
 
-#define NEIGHBOURHOOD_SIZE		5
-#define CUTOFF					20
+#define NEIGHBOURHOOD_SIZE		3
+#define CUTOFF					50
 
 // Prewitt operators 3
-//#define FILTER_SIZE				3
-//int filterHor[FILTER_SIZE * FILTER_SIZE] = { -1, 0, 1, -1, 0, 1, -1, 0, 1 };
-//int filterVer[FILTER_SIZE * FILTER_SIZE] = { -1, -1, -1, 0, 0, 0, 1, 1, 1 };
+#define FILTER_SIZE				3
+int filterHor[FILTER_SIZE * FILTER_SIZE] = { -1, 0, 1, -1, 0, 1, -1, 0, 1 };
+int filterVer[FILTER_SIZE * FILTER_SIZE] = { -1, -1, -1, 0, 0, 0, 1, 1, 1 };
 
 // Prewitt operators 5
-#define FILTER_SIZE				5
-int filterHor[FILTER_SIZE * FILTER_SIZE] = { -1, -1, 0, 1, 1, -1, -1, 0, 1, 1, -1, -1, 0, 1, 1, -1, -1, 0, 1, 1 , -1, -1, 0, 1, 1 };
-int filterVer[FILTER_SIZE * FILTER_SIZE] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+//#define FILTER_SIZE				5
+//int filterHor[FILTER_SIZE * FILTER_SIZE] = { -1, -1, 0, 1, 1, -1, -1, 0, 1, 1, -1, -1, 0, 1, 1, -1, -1, 0, 1, 1 , -1, -1, 0, 1, 1 };
+//int filterVer[FILTER_SIZE * FILTER_SIZE] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
 
 // Prewitt operators 5 [test]
 //#define FILTER_SIZE				5
@@ -171,7 +171,6 @@ void filter_parallel_prewitt(int* inBuffer, int* outBuffer, int width, int heigh
 */
 void filter_serial_edge_detection(int* inBuffer, int* outBuffer, int width, int height, int col=0, int row=0)	
 {
-	int stepHor = SKIP_NEIGHBOURS;
 
 	int lowerX, lowerY, upperX, upperY;
 
@@ -179,8 +178,6 @@ void filter_serial_edge_detection(int* inBuffer, int* outBuffer, int width, int 
 	lowerY = (row < SKIP_NEIGHBOURS) ? SKIP_NEIGHBOURS : row;
 	upperX = (col + width > totalWidth - (SKIP_NEIGHBOURS)) ? totalWidth - (SKIP_NEIGHBOURS) : col + width;
 	upperY = (row + height > totalHeight - (SKIP_NEIGHBOURS)) ? totalHeight - (SKIP_NEIGHBOURS) : row + height;
-
-
 
 	for (int x = lowerX; x < upperX; x++) {
 		for (int y = lowerY; y < upperY; y++) {
